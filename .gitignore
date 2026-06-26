@@ -3,5 +3,7 @@ __pycache__/
 .venv/
 venv/
 .env
-processed/
+.processed/
+*.db
+processed/chroma/
 .streamlit/
