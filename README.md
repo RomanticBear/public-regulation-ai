@@ -1,49 +1,46 @@
-# 사규관리규정 AI 벤치마킹 (데모)
+# 사규관리규정 AI 벤치마킹 — v0.3
 
-공공기관 사규관리규정을 검색·비교하는 PoC입니다.
+## DB 구조
 
-## 빠른 시작 (약 10분)
+| 저장소 | 역할 | 위치 |
+|--------|------|------|
+| **SQLite** | 조문 원문·메타데이터 | `processed/regulation.db` |
+| **Chroma** | OpenAI Embedding 벡터 | `processed/chroma/` |
 
-### 1. Python 설치
+## 필수: API Key
 
-[python.org](https://www.python.org/downloads/) 에서 Python 3.11+ 설치  
-설치 시 **"Add Python to PATH"** 체크
-
-### 2. 의존성 설치 및 인덱스 생성
+`.env`에 `OPENAI_API_KEY` **필수** (검색 embedding + AI 요약)
 
 ```powershell
-cd public-regulation-ai
-python -m venv .venv
+copy .env.example .env
+```
+
+| 용도 | 환경변수 |
+|------|----------|
+| Embedding (조문 벡터) | `OPENAI_EMBEDDING_MODEL=text-embedding-3-small` |
+| LLM (답변 요약) | `OPENAI_MODEL=gpt-4o-mini` |
+| 회사망 SSL | `OPENAI_SSL_VERIFY=false` |
+
+## 실행
+
+```powershell
 .venv\Scripts\activate
 pip install -r requirements.txt
-python scripts/build_index.py
+py -m uvicorn backend.main:app --reload --port 8000
 ```
 
-### 3. 데모 실행
+## 재색인
 
 ```powershell
-streamlit run app.py
+py scripts/rebuild_embeddings.py
 ```
 
-브라우저에서 `http://localhost:8501` 접속
+## 검색
 
-## data 폴더
+```
+질문 → OpenAI Embedding → Chroma 유사 조문
+     + 키워드(동의어) 보조
+     → LLM 요약 + 조문 근거
+```
 
-| 파일 | 형식 | 비고 |
-|------|------|------|
-| 한국수자원공사_사규관리규정.pdf | PDF | ✅ 바로 파싱 가능 |
-| 나머지 5개 | HWP | 자동 추출 시도, 실패 시 PDF 변환 |
-
-HWP 파싱이 실패하면 한글(HWP)에서 **PDF로 저장** 후 `data/`에 넣으세요.
-
-## 데모 기능
-
-- **조문 검색**: "입안예고 기간" 등 키워드 검색
-- **기관 비교**: 두 기관의 동일 주제 조문 나란히 보기
-- **검토 권고**: 타 기관 대비 약한 조문 주제 표시
-
-## 다음 단계
-
-1. HWP → PDF 일괄 변환 (6개 기관 전체)
-2. OpenAI/Azure API 연동 (자연어 요약·비교표)
-3. 조문 embedding 검색 (유사 조문 매칭)
+청크 단위: **조문(Article)**
