@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>사규관리규정 AI 벤치마킹</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <div class="site-brand">
+        <div class="site-logo" aria-hidden="true">규</div>
+        <div>
+          <p class="site-subtitle">공공기관 사규관리규정 분석 시스템</p>
+          <h1 class="site-title">사규관리규정 AI 벤치마킹</h1>
+        </div>
+      </div>
+      <div id="stats-bar" class="stats-bar">
+        <div class="stat-item">
+          <span class="stat-label">등록 기관</span>
+          <span id="stat-orgs" class="stat-value">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">색인 조문</span>
+          <span id="stat-articles" class="stat-value">-</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="site-nav" aria-label="주요 메뉴">
+    <div class="site-nav-inner">
+      <button data-tab="search" class="tab-btn active">규정 Q&amp;A</button>
+      <button data-tab="similar" class="tab-btn">유사 조문</button>
+      <button data-tab="compare" class="tab-btn">기관 비교</button>
+      <button data-tab="gap" class="tab-btn">검토 권고</button>
+      <button data-tab="report" class="tab-btn">벤치마킹 리포트</button>
+      <button data-tab="upload" class="tab-btn">규정 관리</button>
+    </div>
+  </nav>
+
+  <main class="main-content">
+
+    <!-- Q&A -->
+    <section id="panel-search" class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">규정 Q&amp;A</h2>
+        <p class="panel-desc">한국수자원공사 사규관리규정을 대상으로 자연어 질의 시 관련 조문과 분석 결과를 제공합니다.</p>
+      </div>
+      <div class="card">
+        <div class="form-row">
+          <input id="search-query" type="text" placeholder="질문을 입력하세요. 예) 입안예고 기간은 어떻게 되나요?"
+            class="input" />
+          <button id="btn-search" class="btn-primary">질의</button>
+        </div>
+        <div class="chip-group">
+          <span class="chip-label">빠른 검색</span>
+          <button class="chip" data-sample="입안예고">입안예고</button>
+          <button class="chip" data-sample="심의">심의 절차</button>
+          <button class="chip" data-sample="부패영향평가">부패영향평가</button>
+          <button class="chip" data-sample="규제입증">규제입증</button>
+        </div>
+      </div>
+      <div id="search-result" class="hidden result-block">
+        <div class="card">
+          <h3 class="result-title">분석 결과</h3>
+          <div id="search-summary" class="prose result-body"></div>
+        </div>
+        <div class="card">
+          <h3 class="result-title">조문 근거</h3>
+          <div id="search-citations" class="citation-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Similar -->
+    <section id="panel-similar" class="panel hidden">
+      <div class="panel-head">
+        <h2 class="panel-title">유사 조문 검색</h2>
+        <p class="panel-desc">조문 번호·제목이 상이하더라도 의미적으로 유사한 조문을 기관별로 조회합니다.</p>
+      </div>
+      <div class="card">
+        <div class="form-row">
+          <input id="similar-query" type="text" placeholder="검색어를 입력하세요. 예) 사후평가, 입안예고"
+            class="input" />
+          <button id="btn-similar" class="btn-primary">검색</button>
+        </div>
+        <div class="chip-group">
+          <span class="chip-label">빠른 검색</span>
+          <button class="chip-similar" data-sample="입안예고">입안예고</button>
+          <button class="chip-similar" data-sample="적정화">적정화·사후평가</button>
+          <button class="chip-similar" data-sample="부패영향평가">부패영향평가</button>
+          <button class="chip-similar" data-sample="규제입증">규제입증</button>
+        </div>
+      </div>
+      <div id="similar-result" class="hidden result-block">
+        <div class="card">
+          <h3 class="result-title">검색 요약</h3>
+          <div id="similar-summary" class="prose result-body"></div>
+        </div>
+        <div class="card">
+          <h3 class="result-title">기관별 유사 조문</h3>
+          <div id="similar-by-org" class="citation-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Compare -->
+    <section id="panel-compare" class="panel hidden">
+      <div class="panel-head">
+        <h2 class="panel-title">기관 간 규정 비교</h2>
+        <p class="panel-desc">두 기관의 사규관리규정을 주제별로 대조하여 공통점·차이점을 분석합니다.</p>
+      </div>
+      <div class="card">
+        <div class="form-grid form-grid-3">
+          <div class="form-field">
+            <label class="label" for="compare-a">비교 기관 A</label>
+            <select id="compare-a" class="input"></select>
+          </div>
+          <div class="form-field">
+            <label class="label" for="compare-b">비교 기관 B</label>
+            <select id="compare-b" class="input"></select>
+          </div>
+          <div class="form-field">
+            <label class="label" for="compare-topic">비교 주제</label>
+            <input id="compare-topic" type="text" placeholder="예) 입안예고" class="input" />
+          </div>
+        </div>
+        <div class="chip-group">
+          <span class="chip-label">주제 선택</span>
+          <button class="chip-compare" data-sample="입안예고">입안예고</button>
+          <button class="chip-compare" data-sample="사후평가">사후평가</button>
+          <button class="chip-compare" data-sample="부패영향평가">부패영향평가</button>
+          <button class="chip-compare" data-sample="규제입증">규제입증</button>
+        </div>
+        <div class="form-actions">
+          <button id="btn-compare" class="btn-primary">비교 분석</button>
+        </div>
+      </div>
+      <div id="compare-result" class="hidden result-block">
+        <div id="compare-banner" class="compare-banner"></div>
+        <div class="card card-accent">
+          <h3 class="result-title">AI 비교 분석</h3>
+          <div id="compare-summary" class="prose result-body"></div>
+        </div>
+        <div class="insight-grid">
+          <div class="insight-card insight-common">
+            <h4 class="insight-title">공통점</h4>
+            <ul id="compare-common" class="insight-list"></ul>
+          </div>
+          <div class="insight-card insight-diff">
+            <h4 class="insight-title">차이점</h4>
+            <ul id="compare-diff" class="insight-list"></ul>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="result-title">항목별 비교표</h3>
+          <div class="table-wrap">
+            <table id="compare-table" class="data-table compare-table"></table>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="card">
+            <h3 id="compare-title-a" class="result-title result-title-org-a"></h3>
+            <div id="compare-citations-a" class="citation-list"></div>
+          </div>
+          <div class="card">
+            <h3 id="compare-title-b" class="result-title result-title-org-b"></h3>
+            <div id="compare-citations-b" class="citation-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Gap -->
+    <section id="panel-gap" class="panel hidden">
+      <div class="panel-head">
+        <h2 class="panel-title">검토 권고 항목 탐지</h2>
+        <p class="panel-desc">타 공공기관에는 존재하나 기준 기관에서 상대적으로 미흡한 주제를 식별합니다.</p>
+      </div>
+      <div class="card">
+        <div class="form-grid form-grid-2">
+          <div class="form-field">
+            <label class="label" for="gap-org">기준 기관</label>
+            <select id="gap-org" class="input"></select>
+          </div>
+          <div class="form-field">
+            <label class="label" for="gap-topic">검토 주제</label>
+            <input id="gap-topic" type="text" placeholder="예) 사후평가" class="input" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button id="btn-gap" class="btn-primary">주제별 검토</button>
+          <button id="btn-gap-scan" class="btn-secondary">전체 주제 스캔</button>
+        </div>
+      </div>
+      <div id="gap-result" class="hidden result-block">
+        <div id="gap-alert"></div>
+        <div class="card">
+          <h3 class="result-title">분석 결과</h3>
+          <div id="gap-summary" class="prose result-body"></div>
+        </div>
+        <div id="gap-matrix-wrap" class="card hidden">
+          <h3 class="result-title">주제별 커버리지 현황</h3>
+          <div class="table-wrap">
+            <table id="gap-matrix" class="data-table"></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="result-title">타 기관 관련 조문</h3>
+          <div id="gap-others" class="citation-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Report -->
+    <section id="panel-report" class="panel hidden">
+      <div class="panel-head">
+        <h2 class="panel-title">벤치마킹 리포트</h2>
+        <p class="panel-desc">15개 핵심 주제를 기준으로 기준 기관과 타 공공기관의 사규관리규정을 종합 분석합니다.</p>
+      </div>
+      <div class="card">
+        <div class="form-row">
+          <div class="form-field flex-1">
+            <label class="label" for="report-org">기준 기관</label>
+            <select id="report-org" class="input"></select>
+          </div>
+          <button id="btn-report" class="btn-primary btn-report">리포트 생성</button>
+        </div>
+      </div>
+      <div id="report-result" class="hidden result-block">
+        <div id="report-hero" class="report-hero"></div>
+        <div id="report-stats" class="stat-grid"></div>
+        <div id="report-progress-wrap" class="card"></div>
+        <div class="card">
+          <h3 class="result-title">AI 종합 요약</h3>
+          <div id="report-ai-summary" class="ai-callout prose"></div>
+        </div>
+        <div class="card">
+          <h3 class="result-title">검토 권고 항목</h3>
+          <div id="report-review-items"></div>
+        </div>
+        <div class="card">
+          <h3 class="result-title">주제별 커버리지 현황</h3>
+          <div class="table-wrap">
+            <table id="report-heatmap" class="data-table"></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="result-title">상세 보고서</h3>
+          <div id="report-sections" class="report-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Upload -->
+    <section id="panel-upload" class="panel hidden">
+      <div class="panel-head">
+        <h2 class="panel-title">규정 관리</h2>
+        <p class="panel-desc">사규관리규정 파일(PDF, HWP)을 업로드하거나 data 폴더의 파일을 재색인합니다.</p>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3 class="result-title">규정 파일 업로드</h3>
+          <p class="form-hint">PDF 또는 HWP 형식의 사규관리규정 파일</p>
+          <input id="file-input" type="file" accept=".pdf,.hwp" class="input input-file" />
+          <button id="btn-upload" class="btn-primary btn-block">업로드 및 색인</button>
+          <button id="btn-reindex" class="btn-secondary btn-block">data 폴더 재색인</button>
+          <p id="upload-msg" class="form-msg hidden"></p>
+        </div>
+        <div class="card">
+          <h3 class="result-title">등록된 규정 목록</h3>
+          <div id="regulation-list" class="regulation-list">
+            <p class="empty-msg">로딩 중...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="disclaimer">
+      <strong>유의사항</strong>
+      본 시스템의 AI 분석 결과는 업무 참고용이며, 최종 판단 및 의사결정은 조문 원문 확인 및 담당 부서 검토를 통해 이루어져야 합니다.
+    </aside>
+  </main>
+
+  <footer class="site-footer">
+    <p>사규관리규정 AI 벤치마킹 &middot; v0.3</p>
+  </footer>
+
+  <div id="loading" class="loading hidden" role="status" aria-live="polite">
+    <div class="spinner"></div>
+    <p class="loading-text">분석 중입니다. 잠시만 기다려 주세요.</p>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
