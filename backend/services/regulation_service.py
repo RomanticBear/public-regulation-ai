@@ -8,6 +8,7 @@ from sqlalchemy import delete, select
 from backend.database import ArticleRecord, RegulationFile, get_session
 from src.parser import Article, parse_regulation_file
 from src.retriever import rebuild_index
+from src.vector_store import delete_all_embeddings, delete_embeddings_for_file, vector_store_stats
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data"
@@ -37,7 +38,9 @@ def record_to_article(record: ArticleRecord) -> Article:
 
 def load_all_articles() -> list[Article]:
     with get_session() as session:
-        rows = session.scalars(select(ArticleRecord)).all()
+        rows = session.scalars(
+            select(ArticleRecord).order_by(ArticleRecord.id)
+        ).all()
         return [record_to_article(row) for row in rows]
 
 
@@ -63,6 +66,11 @@ def ingest_file(path: Path, *, copy_to_data: bool = True, rebuild: bool = True) 
     with get_session() as session:
         session.execute(delete(ArticleRecord).where(ArticleRecord.source_file == target.name))
         session.execute(delete(RegulationFile).where(RegulationFile.filename == target.name))
+        session.commit()
+
+    delete_embeddings_for_file(target.name)
+
+    with get_session() as session:
         session.add(
             RegulationFile(org=org, regulation=regulation, filename=target.name)
         )
@@ -81,11 +89,11 @@ def ingest_file(path: Path, *, copy_to_data: bool = True, rebuild: bool = True) 
 
 
 def clear_all_regulations() -> None:
-    """DB 전체 초기화 (재색인 전 사용)."""
     with get_session() as session:
         session.execute(delete(ArticleRecord))
         session.execute(delete(RegulationFile))
         session.commit()
+    delete_all_embeddings()
 
 
 def ingest_data_folder(*, fresh: bool = False) -> list[dict]:
@@ -99,6 +107,36 @@ def ingest_data_folder(*, fresh: bool = False) -> list[dict]:
             results.append({"filename": path.name, "error": str(exc)})
     rebuild_search_index()
     return results
+
+
+def _local_data_files() -> set[str]:
+    if not DATA_DIR.exists():
+        return set()
+    return {p.name for p in DATA_DIR.glob("*.pdf")} | {p.name for p in DATA_DIR.glob("*.hwp")}
+
+
+def sync_data_folder_on_startup() -> None:
+    """DB·임베딩이 Supabase에 있으면 skip, 없거나 신규 파일만 처리."""
+    local_files = _local_data_files()
+    if not local_files:
+        return
+
+    current = stats()
+    if current["article_count"] == 0:
+        ingest_data_folder()
+        return
+
+    registered = {row["filename"] for row in list_regulations()}
+    new_files = sorted(local_files - registered)
+    if new_files:
+        for name in new_files:
+            ingest_file(DATA_DIR / name, copy_to_data=False, rebuild=False)
+        rebuild_search_index()
+        return
+
+    vector_count = vector_store_stats().get("vector_count", 0)
+    if vector_count == 0 and current["article_count"] > 0:
+        rebuild_search_index()
 
 
 def list_regulations() -> list[dict]:

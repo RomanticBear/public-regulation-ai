@@ -1,0 +1,38 @@
+-- Supabase SQL Editor에서 1회 실행 (또는 init_db()가 자동 시도)
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- SQLAlchemy init_db()가 테이블을 생성합니다.
+-- 수동 생성 시 아래 참고:
+--
+-- CREATE TABLE regulation_files (
+--   id SERIAL PRIMARY KEY,
+--   org VARCHAR(100) NOT NULL,
+--   regulation VARCHAR(100) NOT NULL,
+--   filename VARCHAR(255) NOT NULL,
+--   uploaded_at TIMESTAMPTZ DEFAULT NOW()
+-- );
+-- CREATE INDEX ix_regulation_files_org ON regulation_files (org);
+--
+-- CREATE TABLE articles (
+--   id SERIAL PRIMARY KEY,
+--   org VARCHAR(100) NOT NULL,
+--   regulation VARCHAR(100) NOT NULL,
+--   source_file VARCHAR(255) NOT NULL,
+--   article_no VARCHAR(50) NOT NULL,
+--   title VARCHAR(200) DEFAULT '',
+--   body TEXT NOT NULL
+-- );
+-- CREATE INDEX ix_articles_org ON articles (org);
+--
+-- CREATE TABLE article_embeddings (
+--   id SERIAL PRIMARY KEY,
+--   article_key VARCHAR(512) NOT NULL UNIQUE,
+--   org VARCHAR(100) NOT NULL,
+--   source_file VARCHAR(255) NOT NULL,
+--   article_no VARCHAR(50) NOT NULL,
+--   model VARCHAR(100) NOT NULL,
+--   embedding vector(1536) NOT NULL
+-- );
+-- CREATE INDEX ix_article_embeddings_org ON article_embeddings (org);
+-- CREATE INDEX ix_article_embeddings_vector ON article_embeddings
+--   USING hnsw (embedding vector_cosine_ops);

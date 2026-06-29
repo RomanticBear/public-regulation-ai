@@ -1,20 +1,17 @@
-"""조문 단위 OpenAI Embedding + Chroma 벡터스토어."""
+"""조문 단위 OpenAI Embedding + Supabase pgvector 저장."""
 
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
-import chromadb
 from dotenv import load_dotenv
+from sqlalchemy import delete, func, select, text
 
+from backend.database import ArticleEmbedding, get_session, is_postgres
 from src.parser import Article
 
 load_dotenv()
 
-ROOT = Path(__file__).resolve().parents[1]
-CHROMA_PATH = ROOT / "processed" / "chroma"
-COLLECTION_NAME = "articles"
 BATCH_SIZE = 64
 
 
@@ -23,7 +20,6 @@ def article_key(article: Article, seq: int) -> str:
 
 
 def article_embed_text(article: Article) -> str:
-    """임베딩용 텍스트 — 조문 번호·제목·본문."""
     header = f"{article.org} {article.regulation} {article.article_no}"
     if article.title:
         header += f"({article.title})"
@@ -31,7 +27,7 @@ def article_embed_text(article: Article) -> str:
 
 
 def is_embedding_available() -> bool:
-    return bool(os.getenv("OPENAI_API_KEY"))
+    return bool(os.getenv("OPENAI_API_KEY")) and is_postgres()
 
 
 def get_embedding_model() -> str:
@@ -46,61 +42,66 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     return [item.embedding for item in response.data]
 
 
-def _get_client() -> chromadb.PersistentClient:
-    CHROMA_PATH.mkdir(parents=True, exist_ok=True)
-    return chromadb.PersistentClient(path=str(CHROMA_PATH))
+def _vector_literal(vec: list[float]) -> str:
+    return "[" + ",".join(str(x) for x in vec) + "]"
+
+
+def delete_all_embeddings() -> None:
+    if not is_postgres():
+        return
+    with get_session() as session:
+        session.execute(delete(ArticleEmbedding))
+        session.commit()
+
+
+def delete_embeddings_for_file(source_file: str) -> None:
+    if not is_postgres():
+        return
+    with get_session() as session:
+        session.execute(
+            delete(ArticleEmbedding).where(ArticleEmbedding.source_file == source_file)
+        )
+        session.commit()
 
 
 def rebuild_vector_store(articles: list[Article]) -> dict:
-    """모든 조문을 embedding 후 Chroma에 저장."""
-    import shutil
-
     if not is_embedding_available():
+        if not is_postgres():
+            return {"ok": False, "reason": "DATABASE_URL이 .env에 설정되어 있지 않습니다."}
         return {"ok": False, "reason": "OPENAI_API_KEY가 .env에 설정되어 있지 않습니다."}
 
     if not articles:
         return {"ok": False, "reason": "조문 없음"}
 
-    if CHROMA_PATH.exists():
-        shutil.rmtree(CHROMA_PATH, ignore_errors=True)
-
-    client = _get_client()
-    try:
-        client.delete_collection(COLLECTION_NAME)
-    except Exception:
-        pass
-    collection = client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"},
-    )
-
+    delete_all_embeddings()
+    model = get_embedding_model()
     texts = [article_embed_text(a) for a in articles]
+    keys = [article_key(a, i) for i, a in enumerate(articles)]
+
     all_embeddings: list[list[float]] = []
     for start in range(0, len(texts), BATCH_SIZE):
         batch = texts[start : start + BATCH_SIZE]
         all_embeddings.extend(embed_texts(batch))
 
-    collection.add(
-        ids=[article_key(a, i) for i, a in enumerate(articles)],
-        embeddings=all_embeddings,
-        documents=texts,
-        metadatas=[
-            {
-                "org": a.org,
-                "regulation": a.regulation,
-                "article_no": a.article_no,
-                "title": a.title or "",
-                "source_file": a.source_file,
-            }
-            for a in articles
-        ],
-    )
+    with get_session() as session:
+        for key, article, embedding in zip(keys, articles, all_embeddings):
+            session.add(
+                ArticleEmbedding(
+                    article_key=key,
+                    org=article.org,
+                    source_file=article.source_file,
+                    article_no=article.article_no,
+                    model=model,
+                    embedding=embedding,
+                )
+            )
+        session.commit()
 
     return {
         "ok": True,
         "count": len(articles),
-        "model": get_embedding_model(),
-        "store": "chroma",
+        "model": model,
+        "store": "pgvector",
     }
 
 
@@ -111,53 +112,68 @@ def vector_search(
     org: str | None = None,
     limit: int = 10,
 ) -> list[tuple[str, Article, float]]:
-    """질문 embedding → Chroma 유사 조문 검색. (key, article, score)"""
     if not is_embedding_available():
         return []
 
-    client = _get_client()
-    try:
-        collection = client.get_collection(COLLECTION_NAME)
-    except Exception:
-        return []
-
-    if collection.count() == 0:
-        return []
+    with get_session() as session:
+        count = session.scalar(select(func.count()).select_from(ArticleEmbedding)) or 0
+        if count == 0:
+            return []
 
     query_embedding = embed_texts([query])[0]
-    where: dict | None = {"org": org} if org else None
+    query_vec = _vector_literal(query_embedding)
+    article_map = {article_key(a, i): a for i, a in enumerate(articles)}
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=min(limit, collection.count()),
-        where=where,
-        include=["distances"],
+    sql = text(
+        """
+        SELECT article_key, 1 - (embedding <=> CAST(:query_vec AS vector)) AS similarity
+        FROM article_embeddings
+        WHERE (:org IS NULL OR org = :org)
+        ORDER BY embedding <=> CAST(:query_vec AS vector)
+        LIMIT :lim
+        """
     )
 
-    if not results["ids"] or not results["ids"][0]:
-        return []
+    with get_session() as session:
+        rows = session.execute(
+            sql,
+            {"query_vec": query_vec, "org": org, "lim": min(limit, count)},
+        ).all()
 
-    article_map = {article_key(a, i): a for i, a in enumerate(articles)}
     hits: list[tuple[str, Article, float]] = []
-    for doc_id, distance in zip(results["ids"][0], results["distances"][0]):
-        article = article_map.get(doc_id)
+    for row in rows:
+        article = article_map.get(row.article_key)
         if article is None:
             continue
-        similarity = max(0.0, 1.0 - float(distance))
-        hits.append((doc_id, article, similarity))
+        hits.append((row.article_key, article, max(0.0, float(row.similarity))))
     return hits
 
 
 def vector_store_stats() -> dict:
-    if not is_embedding_available():
-        return {"embedding_enabled": False, "vector_count": 0}
+    if not is_postgres():
+        return {
+            "embedding_enabled": False,
+            "vector_count": 0,
+            "store": "none",
+            "database": "sqlite",
+        }
+    if not os.getenv("OPENAI_API_KEY"):
+        return {"embedding_enabled": False, "vector_count": 0, "store": "pgvector"}
     try:
-        collection = _get_client().get_collection(COLLECTION_NAME)
+        with get_session() as session:
+            count = session.scalar(select(func.count()).select_from(ArticleEmbedding)) or 0
         return {
             "embedding_enabled": True,
-            "vector_count": collection.count(),
+            "vector_count": count,
             "model": get_embedding_model(),
-            "store": "chroma",
+            "store": "pgvector",
+            "database": "postgres",
         }
     except Exception:
-        return {"embedding_enabled": True, "vector_count": 0, "model": get_embedding_model()}
+        return {
+            "embedding_enabled": True,
+            "vector_count": 0,
+            "model": get_embedding_model(),
+            "store": "pgvector",
+            "database": "postgres",
+        }
