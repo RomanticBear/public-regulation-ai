@@ -6,59 +6,116 @@ from datetime import datetime, timezone
 from typing import Any
 
 from src.parser import Article
-from src.retriever import HybridHit, hybrid_search
-from src.topics import TOPIC_TAXONOMY, all_topics
+from src.retriever import HybridHit
+from src.topics import BENCHMARK_CHECKLIST, all_topics, checklist_count
 
 
-def _best_hit_per_org(articles: list[Article], topic: str) -> dict[str, HybridHit | None]:
-    hits = hybrid_search(articles, topic, limit=50)
-    by_org: dict[str, HybridHit | None] = {}
+def _article_haystack(article: Article) -> str:
+    return f"{article.article_no} {article.title} {article.body}"
+
+
+def _article_title_haystack(article: Article) -> str:
+    return f"{article.article_no} {article.title}"
+
+
+def _matches_anchors(article: Article, meta: dict) -> tuple[bool, list[str]]:
+    haystack = _article_haystack(article)
+    matched: list[str] = []
+
+    groups = meta.get("anchor_groups")
+    if groups:
+        for group in groups:
+            found = [kw for kw in group if kw in haystack]
+            if not found:
+                return False, []
+            matched.extend(found)
+        return True, matched
+
+    for kw in meta.get("anchor_keywords", []):
+        if kw in haystack:
+            matched.append(kw)
+    return bool(matched), matched
+
+
+def _score_anchor_match(article: Article, matched_terms: list[str]) -> float:
+    if not matched_terms:
+        return 0.0
+    title = _article_title_haystack(article)
+    if any(term in title for term in matched_terms):
+        return 1.0
+    return 0.85
+
+
+def _best_article_per_org(
+    articles: list[Article], meta: dict
+) -> dict[str, tuple[Article | None, float, list[str]]]:
+    by_org: dict[str, tuple[Article | None, float, list[str]]] = {}
     for org in sorted({a.org for a in articles}):
-        org_hit = next((h for h in hits if h.article.org == org), None)
-        by_org[org] = org_hit
+        org_articles = [a for a in articles if a.org == org]
+        best: Article | None = None
+        best_score = 0.0
+        best_terms: list[str] = []
+        for article in org_articles:
+            ok, terms = _matches_anchors(article, meta)
+            if not ok:
+                continue
+            score = _score_anchor_match(article, terms)
+            if score > best_score:
+                best = article
+                best_score = score
+                best_terms = terms
+        by_org[org] = (best, best_score, best_terms)
     return by_org
 
 
-def _coverage_status(score: float) -> str:
-    if score >= 0.35:
-        return "있음"
-    if score >= 0.12:
-        return "약함"
-    return "없음"
+def _coverage_status(has_match: bool) -> str:
+    return "있음" if has_match else "없음"
+
+
+def _article_summary(article: Article | None, matched_terms: list[str]) -> dict[str, str] | None:
+    if not article:
+        return None
+    return {
+        "org": article.org,
+        "label": article.label,
+        "excerpt": article.body[:200],
+        "matched_terms": matched_terms,
+    }
 
 
 def build_coverage_matrix(articles: list[Article], target_org: str) -> list[dict[str, Any]]:
-    orgs = sorted({a.org for a in articles})
     rows: list[dict[str, Any]] = []
 
     for topic in all_topics():
-        by_org = _best_hit_per_org(articles, topic)
-        target_hit = by_org.get(target_org)
-        target_score = target_hit.score if target_hit else 0.0
-        target_status = _coverage_status(target_score)
+        meta = BENCHMARK_CHECKLIST[topic]
+        by_org = _best_article_per_org(articles, meta)
 
-        other_scores = [
-            h.score for org, h in by_org.items() if org != target_org and h
-        ]
-        others_have = sum(1 for s in other_scores if s >= 0.35)
-        review_needed = target_status in {"없음", "약함"} and others_have >= 2
+        target_article, target_score, target_terms = by_org.get(target_org, (None, 0.0, []))
+        target_status = _coverage_status(target_article is not None)
+
+        others_have = sum(
+            1
+            for org, (art, _, _) in by_org.items()
+            if org != target_org and art is not None
+        )
+        review_needed = target_status == "없음" and others_have >= 2
 
         rows.append(
             {
                 "topic": topic,
-                "description": TOPIC_TAXONOMY[topic]["description"],
+                "description": meta["description"],
                 "target_status": target_status,
                 "target_score": round(target_score, 3),
-                "target_article": _hit_summary(target_hit),
+                "target_article": _article_summary(target_article, target_terms),
                 "others_have_count": others_have,
                 "review_needed": review_needed,
                 "by_org": {
                     org: {
-                        "status": _coverage_status(h.score if h else 0.0),
-                        "score": round(h.score, 3) if h else 0.0,
-                        "article": _hit_summary(h),
+                        "status": _coverage_status(art is not None),
+                        "score": round(score, 3),
+                        "article": _article_summary(art, terms),
                     }
-                    for org, h in by_org.items()
+                    for org, (art, score, terms) in by_org.items()
                 },
             }
         )
@@ -141,8 +198,8 @@ def build_benchmark_report(
     matrix = build_coverage_matrix(articles, target_org)
     review_items = [row for row in matrix if row["review_needed"]]
     ok_count = sum(1 for r in matrix if r["target_status"] == "있음")
-    weak_count = sum(1 for r in matrix if r["target_status"] == "약함")
     missing_count = sum(1 for r in matrix if r["target_status"] == "없음")
+    n = checklist_count()
 
     orgs = sorted({a.org for a in articles})
     summary_lines = [
@@ -153,8 +210,8 @@ def build_benchmark_report(
         f"**생성 일시:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
         f"",
         f"## 1. 개요",
-        f"- 분석 주제: {len(matrix)}개",
-        f"- 기준 기관 커버리지: 있음 {ok_count} / 약함 {weak_count} / 없음 {missing_count}",
+        f"- 분석 체크리스트: {n}개 (전 기관 동일 기준·앵커 키워드)",
+        f"- 기준 기관: 있음 {ok_count} / 없음 {missing_count}",
         f"- 검토 권고 항목: {len(review_items)}개",
         f"",
         f"## 2. 검토 권고 항목",
@@ -168,9 +225,9 @@ def build_benchmark_report(
     else:
         summary_lines.append("- 검토 권고 항목이 없습니다.")
 
-    summary_lines.extend(["", "## 3. 주제별 현황"])
+    summary_lines.extend(["", "## 3. 체크리스트별 현황"])
     for row in matrix:
-        icon = {"있음": "✅", "약함": "⚠️", "없음": "❌"}[row["target_status"]]
+        icon = "✅" if row["target_status"] == "있음" else "❌"
         summary_lines.append(
             f"- {icon} **{row['topic']}** ({row['target_status']}) — {row['description']}"
         )
@@ -179,7 +236,7 @@ def build_benchmark_report(
         [
             "",
             "## 4. 활용 안내",
-            "본 보고서는 AI·키워드 분석 결과이며, 최종 판단은 조문 원문 및 담당자 검토가 필요합니다.",
+            "본 보고서는 조문 내 앵커 키워드 매칭 결과이며, 최종 판단은 조문 원문 및 담당자 검토가 필요합니다.",
         ]
     )
 
@@ -190,9 +247,9 @@ def build_benchmark_report(
         "coverage_matrix": matrix,
         "review_items": review_items,
         "stats": {
-            "total_topics": len(matrix),
+            "total_topics": n,
             "ok": ok_count,
-            "weak": weak_count,
+            "weak": 0,
             "missing": missing_count,
             "review_count": len(review_items),
         },

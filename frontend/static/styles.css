@@ -433,6 +433,55 @@ body {
 .heatmap-weak { background: var(--status-weak-bg); color: var(--status-weak); }
 .heatmap-miss { background: var(--status-miss-bg); color: var(--status-miss); }
 .heatmap-target { outline: 2px solid var(--gov-blue); outline-offset: -2px; font-weight: 700; }
+.heatmap-cell[data-cite] {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+.heatmap-popover {
+  position: fixed;
+  z-index: 2000;
+  width: min(340px, calc(100vw - 24px));
+  padding: 0.875rem 1rem;
+  background: var(--gov-white);
+  border: 1px solid var(--gov-border);
+  border-left: 3px solid var(--gov-blue);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(15, 35, 65, 0.14);
+  pointer-events: none;
+  line-height: 1.55;
+}
+.heatmap-popover.hidden { display: none; }
+.heatmap-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.heatmap-popover-org {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--gov-navy);
+}
+.heatmap-popover-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--gov-text);
+  margin-bottom: 0.4rem;
+}
+.heatmap-popover-excerpt {
+  font-size: 0.8125rem;
+  color: var(--gov-text-sub);
+  margin: 0 0 0.5rem;
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+}
+.heatmap-popover-meta {
+  font-size: 0.6875rem;
+  color: var(--gov-text-muted);
+}
 
 /* ── Compare banner ── */
 .compare-banner {

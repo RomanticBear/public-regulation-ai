@@ -1,86 +1,113 @@
-"""사규관리규정 주제 분류 및 동의어."""
+"""벤치마킹 체크리스트(사실 확인형) 및 검색 동의어."""
 
 from __future__ import annotations
 
-TOPIC_TAXONOMY: dict[str, dict] = {
-    "목적 및 정의": {
-        "keywords": ["목적", "정의", "용어", "사규", "세칙", "관리부서", "운용부서"],
-        "description": "규정의 목적, 용어 정의, 조직 역할",
+# 벤치마킹·Gap·리포트 히트맵 — 전 기관 동일 기준
+BENCHMARK_CHECKLIST: dict[str, dict] = {
+    "대외 입안예고": {
+        "description": "규정안 대외 입안·사전예고 절차",
+        "keywords": ["입안예고", "입안 예고", "사전예고", "규정안 예고"],
+        "anchor_keywords": ["입안예고", "입안 예고", "사전예고", "규정안 예고"],
     },
-    "입안예고": {
-        "keywords": ["입안예고", "입안 예고", "규정안 예고", "의견수렴", "의견 제출"],
-        "description": "대외 입안예고 절차 및 기간",
-    },
-    "제개정 예고": {
-        "keywords": ["제·개정 예고", "제개정 예고", "개정 예고", "내부 예고"],
-        "description": "내부 제·개정 예고 절차",
-    },
-    "입안 및 심의": {
-        "keywords": ["입안", "심의", "심의요청", "사규심의위원회"],
-        "description": "입안·심의 절차",
-    },
-    "확정 및 시행": {
-        "keywords": ["확정", "결재", "의결", "시행", "효력"],
-        "description": "사규 확정·시행 절차",
-    },
-    "사규 공개": {
-        "keywords": ["공개", "비공개", "게시", "공개심의"],
-        "description": "사규 공개·비공개 기준",
-    },
-    "작성형식": {
-        "keywords": ["작성형식", "장", "절", "조", "항", "별표", "별지"],
-        "description": "사규 작성 형식·체계",
-    },
-    "직권 개정": {
-        "keywords": ["직권", "직권 개정", "정비"],
-        "description": "관리부서 직권 개정",
-    },
-    "사규 관리": {
-        "keywords": ["적정화", "개정", "관리", "사규관리시스템", "기록", "보존"],
-        "description": "사규 유지·관리·적정화",
-    },
-    "담당자 지정": {
-        "keywords": ["담당자", "운용사규별", "담당", "지정"],
-        "description": "운용부서 사규 담당자",
+    "사내 제·개정 예고": {
+        "description": "내부 제·개정 예고·의견수렴",
+        "keywords": ["제·개정 예고", "제개정 예고", "의견수렴", "의견 수렴"],
+        "anchor_keywords": ["제·개정 예고", "제개정 예고", "의견수렴", "의견 수렴"],
     },
     "부패영향평가": {
+        "description": "부패영향평가 전용 조문·절차",
         "keywords": ["부패영향평가", "부패 영향", "부패유발"],
-        "description": "사규 심의 시 부패영향평가",
+        "anchor_keywords": ["부패영향평가"],
     },
-    "규제입증책임": {
-        "keywords": ["규제입증", "규제입증책임", "규제"],
-        "description": "규제입증책임위원회·규제 심의",
+    "사규심의위원회": {
+        "description": "별도 사규심의위원회 설치·운영",
+        "keywords": ["사규심의위원회", "사규 심의위원회"],
+        "anchor_keywords": ["사규심의위원회", "사규 심의위원회"],
     },
-    "기준 운용": {
-        "keywords": ["기준", "절차서", "지침", "요령", "편람"],
-        "description": "사규 외 기준·지침 운용",
+    "직권 개정": {
+        "description": "관리부서 직권 개정·정비",
+        "keywords": ["직권", "직권 개정", "직권개정", "정비"],
+        "anchor_groups": [["직권"], ["개정", "정비"]],
     },
-    "심의위원회": {
-        "keywords": ["위원회", "위원", "소집", "의결", "간사"],
-        "description": "사규심의위원회 구성·운영",
+    "사규 공개": {
+        "description": "사규 공개 원칙·방법",
+        "keywords": ["사규의 공개", "사규 공개", "공개"],
+        "anchor_keywords": ["사규의 공개", "사규 공개", "사규를 공개"],
     },
-    "해석 및 효력": {
-        "keywords": ["해석", "효력", "법령", "상위", "하위"],
-        "description": "사규 해석·효력·상하위 관계",
+    "비공개 사유": {
+        "description": "비공개 대상·사유 규정",
+        "keywords": ["비공개", "공개하지 아니", "비공개대상"],
+        "anchor_keywords": ["비공개", "공개하지 아니", "비공개대상"],
+    },
+    "부분공개 규정": {
+        "description": "사규 일부공개·부분공개",
+        "keywords": ["부분공개", "일부공개", "부분 공개"],
+        "anchor_keywords": ["부분공개", "일부공개", "부분 공개"],
+    },
+    "별지·서식 체계": {
+        "description": "별지·별표 서식 규정",
+        "keywords": ["별지 제", "별표", "별지"],
+        "anchor_keywords": ["별지 제", "별표"],
+    },
+    "신·구조문 대비표": {
+        "description": "개정 시 신·구조문 대비표",
+        "keywords": ["신·구조문", "신구조문", "대비표"],
+        "anchor_keywords": ["신·구조문", "신구조문", "대비표"],
+    },
+    "사규 해석": {
+        "description": "사규 해석 주체·절차",
+        "keywords": ["해석"],
+        "anchor_keywords": ["(해석)", "해석에 관", "해석) ", "해석 및"],
+    },
+    "사규 적정화": {
+        "description": "사규 정기·수시 적정화",
+        "keywords": ["적정화"],
+        "anchor_keywords": ["적정화"],
     },
 }
 
+# 하위 호환
+TOPIC_TAXONOMY = BENCHMARK_CHECKLIST
 
-def expand_topic_query(topic: str) -> list[str]:
-    """주제명 또는 키워드 → 검색어 목록."""
-    terms = [topic.strip()]
-    for name, meta in TOPIC_TAXONOMY.items():
-        if topic in name or name in topic:
-            terms.append(name)
-            terms.extend(meta["keywords"])
-        for kw in meta["keywords"]:
-            if kw in topic or topic in kw:
-                terms.extend(meta["keywords"])
-                terms.append(name)
-                break
-    terms.extend({t.replace(" ", "") for t in terms})
-    return list(dict.fromkeys(t for t in terms if t))
+
+def get_checklist_meta(topic: str) -> dict:
+    return BENCHMARK_CHECKLIST[topic]
 
 
 def all_topics() -> list[str]:
-    return list(TOPIC_TAXONOMY.keys())
+    return list(BENCHMARK_CHECKLIST.keys())
+
+
+def checklist_count() -> int:
+    return len(BENCHMARK_CHECKLIST)
+
+
+def expand_topic_query(topic: str) -> list[str]:
+    """주제명 또는 키워드 → 검색어 목록 (Q&A·유사조문용)."""
+    q = topic.strip()
+    terms = [q]
+
+    for name, meta in BENCHMARK_CHECKLIST.items():
+        keywords = meta.get("keywords", [])
+        anchors = meta.get("anchor_keywords", [])
+        all_kw = keywords + anchors
+        for group in meta.get("anchor_groups", []):
+            all_kw.extend(group)
+
+        if q == name:
+            terms.extend(all_kw)
+            terms.append(name)
+            break
+
+        matched = False
+        for kw in all_kw:
+            if q == kw or (len(q) >= 2 and (q in kw or kw in q)):
+                terms.extend(all_kw)
+                terms.append(name)
+                matched = True
+                break
+        if matched:
+            break
+
+    terms.extend({t.replace(" ", "") for t in terms})
+    return list(dict.fromkeys(t for t in terms if t))

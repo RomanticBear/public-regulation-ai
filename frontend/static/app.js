@@ -43,6 +43,114 @@ function heatmapClass(status) {
   return 'heatmap-miss';
 }
 
+let heatmapPopover = null;
+
+function ensureHeatmapPopover() {
+  if (!heatmapPopover) {
+    heatmapPopover = document.createElement('div');
+    heatmapPopover.id = 'heatmap-popover';
+    heatmapPopover.className = 'heatmap-popover hidden';
+    heatmapPopover.setAttribute('role', 'tooltip');
+    document.body.appendChild(heatmapPopover);
+  }
+  return heatmapPopover;
+}
+
+function heatmapCiteAttr(status, article, score) {
+  if (!article || status === '없음') return '';
+  const payload = encodeURIComponent(JSON.stringify({
+    org: article.org,
+    label: article.label,
+    excerpt: article.excerpt || '',
+    score: score ?? null,
+    status,
+    matched_terms: article.matched_terms || [],
+  }));
+  return ` data-cite="${payload}" tabindex="0"`;
+}
+
+function showHeatmapPopover(cell) {
+  const raw = cell.dataset.cite;
+  if (!raw) return;
+  let cite;
+  try {
+    cite = JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return;
+  }
+
+  const pop = ensureHeatmapPopover();
+  const terms = (cite.matched_terms || []).length
+    ? cite.matched_terms.join(', ')
+    : '-';
+  pop.innerHTML = `
+    <div class="heatmap-popover-header">
+      <span class="heatmap-popover-org">${escapeHtml(cite.org)}</span>
+      ${statusBadge(cite.status)}
+    </div>
+    <div class="heatmap-popover-label">${escapeHtml(cite.label)}</div>
+    <p class="heatmap-popover-excerpt">${escapeHtml(cite.excerpt)}</p>
+    <div class="heatmap-popover-meta">매칭 키워드: ${escapeHtml(terms)}</div>`;
+  pop.classList.remove('hidden');
+
+  const rect = cell.getBoundingClientRect();
+  pop.style.visibility = 'hidden';
+  pop.style.left = '0';
+  pop.style.top = '0';
+  const popRect = pop.getBoundingClientRect();
+  pop.style.visibility = '';
+
+  const gap = 10;
+  let left = rect.right + gap;
+  let top = rect.top + rect.height / 2 - popRect.height / 2;
+
+  if (left + popRect.width > window.innerWidth - 12) {
+    left = rect.left - popRect.width - gap;
+  }
+  if (top < 12) top = 12;
+  if (top + popRect.height > window.innerHeight - 12) {
+    top = window.innerHeight - popRect.height - 12;
+  }
+
+  pop.style.left = `${left}px`;
+  pop.style.top = `${top}px`;
+}
+
+function hideHeatmapPopover() {
+  ensureHeatmapPopover().classList.add('hidden');
+}
+
+function bindHeatmapTooltips(table) {
+  if (!table || table.dataset.citeBound) return;
+  table.dataset.citeBound = '1';
+
+  table.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('[data-cite]');
+    if (!cell || !table.contains(cell)) return;
+    showHeatmapPopover(cell);
+  });
+
+  table.addEventListener('mouseout', (e) => {
+    const from = e.target.closest('[data-cite]');
+    const to = e.relatedTarget?.closest?.('[data-cite]');
+    if (from && from === to) return;
+    hideHeatmapPopover();
+  });
+
+  table.addEventListener('focusin', (e) => {
+    const cell = e.target.closest('[data-cite]');
+    if (cell) showHeatmapPopover(cell);
+  });
+
+  table.addEventListener('focusout', () => hideHeatmapPopover());
+}
+
+function heatmapStatusCell(status, article, score, extraClass = '') {
+  const cls = `heatmap-cell ${extraClass} ${heatmapClass(status)}`.trim();
+  const cite = heatmapCiteAttr(status, article, score);
+  return `<td class="${cls}"${cite}>${status}</td>`;
+}
+
 function renderMarkdown(text) {
   if (!text) return '';
   const lines = text.split('\n');
@@ -190,14 +298,14 @@ function renderReportHero(targetOrg, generatedAt) {
     : new Date().toLocaleString('ko-KR');
   $('#report-hero').innerHTML = `
     <h3>${escapeHtml(targetOrg)} 벤치마킹 분석 리포트</h3>
-    <p>15개 핵심 주제 기준 · 타 공공기관 사규관리규정 비교 · ${date}</p>`;
+    <p>12개 체크리스트(전 기관 동일 기준) · ${date}</p>`;
 }
 
 function renderReportStats(st) {
   $('#report-stats').innerHTML = `
     <div class="stat-card stat-total"><div class="num">${st.total_topics}</div><div class="lbl">분석 주제</div></div>
     <div class="stat-card stat-ok"><div class="num">${st.ok}</div><div class="lbl">커버리지 충족</div></div>
-    <div class="stat-card stat-warn"><div class="num">${st.weak + st.missing}</div><div class="lbl">미흡 / 미존재</div></div>
+    <div class="stat-card stat-warn"><div class="num">${st.missing}</div><div class="lbl">미존재</div></div>
     <div class="stat-card stat-alert"><div class="num">${st.review_count}</div><div class="lbl">검토 권고</div></div>`;
 }
 
@@ -258,16 +366,23 @@ function renderReportHeatmap(matrix, targetOrg, orgs) {
           <strong>${escapeHtml(row.topic)}</strong>
           <div style="font-size:0.75rem;color:var(--gov-text-muted);margin-top:0.15rem">${escapeHtml(row.description)}</div>
         </td>
-        <td class="heatmap-cell heatmap-target ${heatmapClass(row.target_status)}">${row.target_status}</td>
+        ${heatmapStatusCell(
+          row.target_status,
+          row.target_article,
+          row.target_score,
+          'heatmap-target',
+        )}
         ${others.map(o => {
           const cell = row.by_org?.[o];
           const st = cell?.status || '없음';
-          return `<td class="heatmap-cell ${heatmapClass(st)}">${st}</td>`;
+          return heatmapStatusCell(st, cell?.article, cell?.score);
         }).join('')}
         <td style="text-align:center">${row.review_needed
           ? '<span class="badge badge-review">권고</span>'
           : '-'}</td>
       </tr>`).join('')}</tbody>`;
+
+  bindHeatmapTooltips(table);
 }
 
 function renderReportSections(markdown) {
@@ -444,7 +559,7 @@ $('#btn-gap-scan').addEventListener('click', async () => {
     $('#gap-alert').innerHTML = data.review_count > 0
       ? `<div class="alert-warn"><strong>${data.review_count}개 주제</strong>에서 검토가 권고됩니다.</div>`
       : '<div class="alert-info">검토 권고 대상 주제가 없습니다.</div>';
-    $('#gap-summary').innerHTML = `<strong>${escapeHtml(target_org)}</strong> — 15개 핵심 주제 전체 스캔을 완료하였습니다.`;
+    $('#gap-summary').innerHTML = `<strong>${escapeHtml(target_org)}</strong> — ${data.coverage_matrix?.length ?? 12}개 체크리스트 전체 스캔을 완료하였습니다.`;
     renderGapMatrix($('#gap-matrix'), data.coverage_matrix, target_org);
     $('#gap-others').innerHTML = data.review_items.map(r => `
       <div class="review-card">
