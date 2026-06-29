@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
@@ -30,7 +33,7 @@ class Article:
 
 
 ARTICLE_PATTERN = re.compile(
-    r"제(\d+)조(?:의(\d+))?(?:\(([^)]+)\))?",
+    r"제\s*(\d+)\s*조(?:의(\d+))?\s*(?:\(([^)]+)\))?(?!\s*의)",
     re.MULTILINE,
 )
 NOISE_PATTERN = re.compile(
@@ -71,45 +74,52 @@ def extract_pdf_text(path: Path) -> str:
     return normalize_text("\n".join(parts))
 
 
+def _hwp5txt_binary() -> Path | None:
+    venv_bin = Path(sys.executable).resolve().parent / "hwp5txt.exe"
+    if venv_bin.exists():
+        return venv_bin
+    found = shutil.which("hwp5txt")
+    return Path(found) if found else None
+
+
+def _extract_hwp_text_legacy(path: Path) -> str:
+    """PrvText 미리보기 fallback (본문 일부만 추출될 수 있음)."""
+    ole = olefile.OleFileIO(str(path))
+    chunks: list[str] = []
+    try:
+        if ole.exists("PrvText"):
+            raw = ole.openstream("PrvText").read()
+            chunks.append(raw.decode("utf-16le", errors="ignore"))
+    finally:
+        ole.close()
+    return normalize_text("\n".join(chunks))
+
+
 def extract_hwp_text(path: Path) -> str:
-    """HWP 5.0 OLE 파일에서 텍스트 추출 (PrvText + BodyText)."""
+    """HWP 5.0 텍스트 추출 (pyhwp hwp5txt 우선)."""
     if not olefile.isOleFile(path):
         raise ValueError(f"OLE 형식이 아닌 HWP 파일: {path.name}")
 
-    ole = olefile.OleFileIO(str(path))
-    chunks: list[str] = []
-
-    if ole.exists("PrvText"):
-        raw = ole.openstream("PrvText").read()
-        chunks.append(raw.decode("utf-16le", errors="ignore"))
-
-    for entry in ole.listdir():
-        if entry[0] != "BodyText":
-            continue
-        try:
-            import zlib
-
-            data = ole.openstream(entry).read()
-            header_size = 4 if data[:2] == b"\x78\x9c" else 256
-            payload = data[header_size:]
-            for wbits in (-15, 15):
-                try:
-                    decompressed = zlib.decompress(payload, wbits)
-                    chunks.append(decompressed.decode("utf-16le", errors="ignore"))
-                    break
-                except zlib.error:
-                    continue
-        except Exception:
-            continue
-
-    ole.close()
-    text = normalize_text("\n".join(chunks))
-    if len(text) < 100:
-        raise ValueError(
-            f"HWP 텍스트 추출 실패: {path.name}. "
-            "한글에서 PDF로 저장 후 data 폴더에 넣어 주세요."
+    binary = _hwp5txt_binary()
+    if binary is not None:
+        result = subprocess.run(
+            [str(binary), str(path.resolve())],
+            capture_output=True,
+            check=False,
         )
-    return text
+        if result.returncode == 0:
+            text = normalize_text(result.stdout.decode("utf-8", errors="replace"))
+            if len(text) >= 100:
+                return text
+
+    legacy = _extract_hwp_text_legacy(path)
+    if len(legacy) >= 100:
+        return legacy
+
+    raise ValueError(
+        f"HWP 텍스트 추출 실패: {path.name}. "
+        "pip install pyhwp 후 재시도하거나, 한글에서 PDF로 저장해 주세요."
+    )
 
 
 def extract_file_text(path: Path) -> str:

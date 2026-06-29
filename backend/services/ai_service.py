@@ -134,11 +134,9 @@ def summarize_with_llm(
 
 
 def _load_articles():
-    from backend.services.regulation_service import load_all_articles, rebuild_search_index
+    from backend.services.regulation_service import load_all_articles
 
-    articles = load_all_articles()
-    rebuild_search_index(articles)
-    return articles
+    return load_all_articles()
 
 
 def run_search(query: str) -> dict[str, Any]:

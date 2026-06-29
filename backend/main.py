@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -19,11 +18,12 @@ from backend.services.ai_service import (
     run_similar_search,
 )
 from backend.services.regulation_service import (
+    DATA_DIR,
     ingest_data_folder,
     ingest_file,
     list_regulations,
-    rebuild_search_index,
     stats,
+    sync_data_folder_on_startup,
 )
 from src.retriever import get_search_backend
 from src.vector_store import vector_store_stats
@@ -70,8 +70,14 @@ def _ensure_data() -> None:
 
 
 def _ensure_embedding() -> None:
+    from backend.database import is_postgres
     from src.vector_store import is_embedding_available
 
+    if not is_postgres():
+        raise HTTPException(
+            status_code=503,
+            detail="DATABASE_URL이 .env에 설정되어 있지 않습니다.",
+        )
     if not is_embedding_available():
         raise HTTPException(
             status_code=503,
@@ -82,21 +88,22 @@ def _ensure_embedding() -> None:
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
-    data_dir = ROOT / "data"
-    if data_dir.exists() and any(data_dir.iterdir()):
-        ingest_data_folder()
-    else:
-        rebuild_search_index()
+    sync_data_folder_on_startup()
 
 
 @app.get("/api/health")
 def health() -> dict:
+    from backend.database import is_postgres
+    from src.topics import checklist_count
     from src.vector_store import is_embedding_available
 
     return {
         "status": "ok",
-        "version": "0.3.0",
+        "version": "0.4.1",
+        "database": "postgres" if is_postgres() else "sqlite",
         "embedding_enabled": is_embedding_available(),
+        "checklist_count": checklist_count(),
+        "benchmark_mode": "anchor",
     }
 
 
@@ -116,22 +123,21 @@ def api_regulations() -> list[dict]:
 @app.post("/api/regulations/upload")
 async def upload_regulation(file: UploadFile = File(...)) -> dict:
     _ensure_embedding()
-    suffix = Path(file.filename or "").suffix.lower()
+    original_name = Path(file.filename or "").name
+    if not original_name:
+        raise HTTPException(status_code=400, detail="파일명이 없습니다.")
+    suffix = Path(original_name).suffix.lower()
     if suffix not in {".pdf", ".hwp"}:
         raise HTTPException(status_code=400, detail="PDF 또는 HWP 파일만 업로드 가능합니다.")
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
-
+    DATA_DIR.mkdir(exist_ok=True)
+    target = DATA_DIR / original_name
     try:
-        result = ingest_file(tmp_path, copy_to_data=True)
+        target.write_bytes(await file.read())
+        result = ingest_file(target, copy_to_data=False)
         return {"ok": True, **result}
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    finally:
-        tmp_path.unlink(missing_ok=True)
 
 
 @app.post("/api/regulations/reindex")

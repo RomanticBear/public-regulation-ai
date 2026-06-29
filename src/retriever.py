@@ -26,6 +26,12 @@ class HybridHit:
 
 def get_search_backend() -> str:
     if not is_embedding_available():
+        from backend.database import is_postgres
+
+        if not is_postgres():
+            raise EmbeddingNotConfiguredError(
+                "DATABASE_URL이 .env에 설정되어 있지 않습니다."
+            )
         raise EmbeddingNotConfiguredError(
             "OPENAI_API_KEY가 .env에 설정되어 있지 않습니다."
         )
@@ -48,6 +54,12 @@ def hybrid_search(
 ) -> list[HybridHit]:
     """키워드(동의어) + embedding 의미 검색 결합."""
     if not is_embedding_available():
+        from backend.database import is_postgres
+
+        if not is_postgres():
+            raise EmbeddingNotConfiguredError(
+                "DATABASE_URL이 .env에 설정되어 있지 않습니다."
+            )
         raise EmbeddingNotConfiguredError(
             "OPENAI_API_KEY가 .env에 설정되어 있지 않습니다."
         )
