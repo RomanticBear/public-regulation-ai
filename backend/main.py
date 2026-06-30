@@ -103,7 +103,7 @@ def health() -> dict:
         "database": "postgres" if is_postgres() else "sqlite",
         "embedding_enabled": is_embedding_available(),
         "checklist_count": checklist_count(),
-        "benchmark_mode": "anchor",
+        "benchmark_mode": "hybrid",
     }
 
 
