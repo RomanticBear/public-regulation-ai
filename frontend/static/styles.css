@@ -36,6 +36,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Sticky top bar (header + nav) ── */
+.site-top {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+
 /* ── Header ── */
 .site-header {
   background: var(--gov-navy);
