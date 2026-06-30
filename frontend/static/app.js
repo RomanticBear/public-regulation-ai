@@ -65,6 +65,7 @@ function heatmapCiteAttr(status, article, score) {
     score: score ?? null,
     status,
     matched_terms: article.matched_terms || [],
+    match_source: article.match_source || null,
   }));
   return ` data-cite="${payload}" tabindex="0"`;
 }
@@ -83,6 +84,11 @@ function showHeatmapPopover(cell) {
   const terms = (cite.matched_terms || []).length
     ? cite.matched_terms.join(', ')
     : '-';
+  const sourceLabel = cite.match_source === 'anchor'
+    ? '키워드 확인'
+    : cite.match_source === 'semantic'
+      ? 'AI 유사도'
+      : '-';
   pop.innerHTML = `
     <div class="heatmap-popover-header">
       <span class="heatmap-popover-org">${escapeHtml(cite.org)}</span>
@@ -90,7 +96,7 @@ function showHeatmapPopover(cell) {
     </div>
     <div class="heatmap-popover-label">${escapeHtml(cite.label)}</div>
     <p class="heatmap-popover-excerpt">${escapeHtml(cite.excerpt)}</p>
-    <div class="heatmap-popover-meta">매칭 키워드: ${escapeHtml(terms)}</div>`;
+    <div class="heatmap-popover-meta">판정: ${escapeHtml(sourceLabel)} · ${escapeHtml(terms)}</div>`;
   pop.classList.remove('hidden');
 
   const rect = cell.getBoundingClientRect();
@@ -230,10 +236,19 @@ function renderList(el, items, emptyMsg = '해당 항목 없음') {
 
 function renderCompareBanner(orgA, orgB, topic) {
   $('#compare-banner').innerHTML = `
-    <span class="org-pill org-pill-a">${escapeHtml(orgA)}</span>
-    <span class="vs-badge">대비</span>
-    <span class="org-pill org-pill-b">${escapeHtml(orgB)}</span>
-    <span class="topic-tag">주제: ${escapeHtml(topic)}</span>`;
+    <div class="compare-banner-main">
+      <span class="compare-org compare-org-a">${escapeHtml(orgA)}</span>
+      <span class="compare-vs" aria-hidden="true">↔</span>
+      <span class="compare-org compare-org-b">${escapeHtml(orgB)}</span>
+    </div>
+    <div class="compare-banner-topic">주제 · <strong>${escapeHtml(topic)}</strong></div>`;
+}
+
+function syncCompareChipActive() {
+  const topic = ($('#compare-topic')?.value || '').trim();
+  $$('.chip-compare').forEach(chip => {
+    chip.classList.toggle('active', chip.dataset.sample === topic);
+  });
 }
 
 function renderCompareTable(table, rows, orgA, orgB, topic) {
@@ -305,7 +320,7 @@ function renderReportStats(st) {
   $('#report-stats').innerHTML = `
     <div class="stat-card stat-total"><div class="num">${st.total_topics}</div><div class="lbl">분석 주제</div></div>
     <div class="stat-card stat-ok"><div class="num">${st.ok}</div><div class="lbl">커버리지 충족</div></div>
-    <div class="stat-card stat-warn"><div class="num">${st.missing}</div><div class="lbl">미존재</div></div>
+    <div class="stat-card stat-warn"><div class="num">${st.missing + st.weak}</div><div class="lbl">미존재 / 약함</div></div>
     <div class="stat-card stat-alert"><div class="num">${st.review_count}</div><div class="lbl">검토 권고</div></div>`;
 }
 
@@ -449,6 +464,7 @@ async function loadRegulations() {
 
 $$('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    if (btn.disabled) return;
     $$('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     $$('.panel').forEach(p => p.classList.add('hidden'));
@@ -464,8 +480,12 @@ $$('.chip-similar').forEach(chip => {
   chip.addEventListener('click', () => { $('#similar-query').value = chip.dataset.sample; });
 });
 $$('.chip-compare').forEach(chip => {
-  chip.addEventListener('click', () => { $('#compare-topic').value = chip.dataset.sample; });
+  chip.addEventListener('click', () => {
+    $('#compare-topic').value = chip.dataset.sample;
+    syncCompareChipActive();
+  });
 });
+$('#compare-topic')?.addEventListener('input', syncCompareChipActive);
 
 $('#btn-search').addEventListener('click', async () => {
   const query = $('#search-query').value.trim();
@@ -510,8 +530,8 @@ $('#btn-compare').addEventListener('click', async () => {
     $('#compare-result').classList.remove('hidden');
     renderCompareBanner(data.org_a, data.org_b, topic);
     setSummary($('#compare-summary'), data.summary);
-    renderList($('#compare-common'), data.common_points);
-    renderList($('#compare-diff'), data.differences);
+    renderList($('#compare-common'), data.common_points, '공통 요소가 확인되지 않았습니다.');
+    renderList($('#compare-diff'), data.differences, '뚜렷한 차이가 확인되지 않았습니다.');
     renderCompareTable($('#compare-table'), data.comparison_table || [], org_a, org_b, topic);
     $('#compare-title-a').textContent = `${data.org_a} — 근거 조문`;
     $('#compare-title-b').textContent = `${data.org_b} — 근거 조문`;
@@ -537,12 +557,35 @@ $('#btn-gap').addEventListener('click', async () => {
     $('#gap-matrix-wrap').classList.add('hidden');
     $('#gap-alert').innerHTML = data.review_needed
       ? `<div class="alert-warn"><strong>검토 권고</strong> — ${escapeHtml(target_org)}, 주제「${escapeHtml(topic)}」</div>`
-      : '<div class="alert-info">명확한 누락 신호가 확인되지 않았습니다. 참고용으로 활용하시기 바랍니다.</div>';
+      : '<div class="alert-info">체크리스트 기준 검토 권고 대상이 아닙니다. 기준 기관에도 관련 조문이 확인되었습니다.</div>';
     setSummary($('#gap-summary'), data.summary);
-    const others = Object.entries(data.other_orgs || {});
-    $('#gap-others').innerHTML = others.length
-      ? others.map(([, c]) => renderCitation(c)).join('')
-      : '<p class="empty-msg">없음</p>';
+    const targetCard = data.target_citation
+      ? renderCitation(data.target_citation)
+      : '<p class="empty-msg">관련 조문 없음</p>';
+    $('#gap-target').innerHTML = targetCard;
+    $('#gap-target-wrap').classList.remove('hidden');
+    const othersTitle = $('#gap-others-title');
+    const othersDesc = $('#gap-others-desc');
+    if (data.review_needed) {
+      othersTitle.textContent = '타 기관 관련 조문';
+      othersDesc.classList.add('hidden');
+      $('#gap-others-wrap').classList.remove('hidden');
+      const others = Object.entries(data.other_orgs || {});
+      $('#gap-others').innerHTML = others.length
+        ? others.map(([, c]) => renderCitation(c)).join('')
+        : '<p class="empty-msg">없음</p>';
+    } else {
+      const refs = Object.entries(data.reference_orgs || {});
+      if (refs.length) {
+        othersTitle.textContent = '참고: 타 기관 조문';
+        othersDesc.textContent = '검토 권고 대상이 아닙니다. 세부 비교가 필요할 때 참고하세요.';
+        othersDesc.classList.remove('hidden');
+        $('#gap-others-wrap').classList.remove('hidden');
+        $('#gap-others').innerHTML = refs.map(([, c]) => renderCitation(c)).join('');
+      } else {
+        $('#gap-others-wrap').classList.add('hidden');
+      }
+    }
   } catch (e) { alert(e.message); }
   finally { showLoading(false); }
 });
@@ -558,9 +601,13 @@ $('#btn-gap-scan').addEventListener('click', async () => {
     $('#gap-matrix-wrap').classList.remove('hidden');
     $('#gap-alert').innerHTML = data.review_count > 0
       ? `<div class="alert-warn"><strong>${data.review_count}개 주제</strong>에서 검토가 권고됩니다.</div>`
-      : '<div class="alert-info">검토 권고 대상 주제가 없습니다.</div>';
+      : '<div class="alert-info">검토 권고 대상 주제가 없습니다. 체크리스트 기준으로 커버리지가 양호합니다.</div>';
     $('#gap-summary').innerHTML = `<strong>${escapeHtml(target_org)}</strong> — ${data.coverage_matrix?.length ?? 12}개 체크리스트 전체 스캔을 완료하였습니다.`;
     renderGapMatrix($('#gap-matrix'), data.coverage_matrix, target_org);
+    $('#gap-target-wrap').classList.add('hidden');
+    $('#gap-others-title').textContent = '검토 권고 항목';
+    $('#gap-others-desc').classList.add('hidden');
+    $('#gap-others-wrap').classList.remove('hidden');
     $('#gap-others').innerHTML = data.review_items.map(r => `
       <div class="review-card">
         <div class="review-card-header">
@@ -569,7 +616,7 @@ $('#btn-gap-scan').addEventListener('click', async () => {
         </div>
         <p style="font-size:0.8125rem;color:var(--gov-text-sub)">${escapeHtml(r.description)}</p>
         <span style="font-size:0.75rem;color:var(--gov-text-muted)">타 기관 ${r.others_have_count}개 보유</span>
-      </div>`).join('') || '<p class="empty-msg">없음</p>';
+      </div>`).join('') || '<p class="empty-msg">검토 권고 대상 주제가 없습니다. 표의 「N개 기관」은 타 기관 보유 수이며, 기준 기관도 충족하면 권고하지 않습니다.</p>';
   } catch (e) { alert(e.message); }
   finally { showLoading(false); }
 });

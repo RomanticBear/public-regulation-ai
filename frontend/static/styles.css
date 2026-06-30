@@ -139,6 +139,30 @@ body {
   font-weight: 700;
   border-bottom-color: var(--gov-blue);
 }
+.tab-btn:disabled,
+.tab-btn-disabled {
+  color: var(--gov-text-muted);
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.tab-btn:disabled:hover,
+.tab-btn-disabled:hover {
+  color: var(--gov-text-muted);
+  background: none;
+}
+.tab-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--gov-text-muted);
+  background: var(--gov-bg);
+  border: 1px solid var(--gov-border);
+  border-radius: 3px;
+  vertical-align: middle;
+}
 
 /* ── Main content ── */
 .main-content {
@@ -270,7 +294,7 @@ body {
   color: var(--gov-text-muted);
   margin-right: 0.25rem;
 }
-.chip, .chip-similar, .chip-compare {
+.chip, .chip-similar {
   font-family: var(--font);
   font-size: 0.75rem;
   background: var(--gov-white);
@@ -280,7 +304,7 @@ body {
   border-radius: var(--radius);
   cursor: pointer;
 }
-.chip:hover, .chip-similar:hover, .chip-compare:hover {
+.chip:hover, .chip-similar:hover {
   background: var(--gov-blue-light);
   border-color: var(--gov-blue);
 }
@@ -483,41 +507,92 @@ body {
   color: var(--gov-text-muted);
 }
 
+/* ── Compare form ── */
+.compare-form-card .compare-orgs { margin-bottom: 0; }
+.compare-topic-section {
+  margin-top: 1.125rem;
+  padding-top: 1.125rem;
+  border-top: 1px solid var(--gov-border);
+}
+.compare-topic-row {
+  display: flex;
+  gap: 0.625rem;
+  align-items: stretch;
+  margin-top: 0.375rem;
+}
+.compare-topic-row .input { flex: 1; min-width: 0; }
+.btn-compare {
+  flex-shrink: 0;
+  min-width: 6.5rem;
+  font-weight: 600;
+}
+.compare-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+.chip-compare {
+  font-family: var(--font);
+  font-size: 0.8125rem;
+  background: var(--gov-bg);
+  color: var(--gov-text-sub);
+  border: 1px solid var(--gov-border);
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.chip-compare:hover {
+  background: var(--gov-blue-light);
+  border-color: #b3cfe6;
+  color: var(--gov-navy);
+}
+.chip-compare.active {
+  background: var(--gov-navy);
+  border-color: var(--gov-navy);
+  color: var(--gov-white);
+  font-weight: 600;
+}
+
 /* ── Compare banner ── */
 .compare-banner {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 1.125rem 1.5rem;
+  background: var(--gov-bg);
+  border: 1px solid var(--gov-border);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+.compare-banner-main {
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.875rem;
-  padding: 0.875rem 1.25rem;
-  background: var(--gov-white);
-  border: 1px solid var(--gov-border);
-  border-left: 4px solid var(--gov-blue);
-  margin-bottom: 1rem;
   flex-wrap: wrap;
+  gap: 0.625rem 0.875rem;
 }
-.org-pill {
+.compare-org {
+  font-size: 1.0625rem;
   font-weight: 700;
-  font-size: 0.9rem;
-  padding: 0.35rem 0.875rem;
-  border-radius: var(--radius);
-}
-.org-pill-a { background: var(--gov-navy); color: var(--gov-white); }
-.org-pill-b { background: #1a5276; color: var(--gov-white); }
-.vs-badge {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--gov-text-muted);
-  padding: 0.2rem 0.5rem;
-  border: 1px solid var(--gov-border);
-  background: var(--gov-bg);
-}
-.topic-tag {
-  font-size: 0.8125rem;
-  background: var(--gov-blue-light);
-  border: 1px solid #b3cfe6;
   color: var(--gov-navy);
-  padding: 0.25rem 0.65rem;
+  letter-spacing: -0.01em;
+}
+.compare-vs {
+  font-size: 1rem;
+  color: var(--gov-text-muted);
+  line-height: 1;
+  user-select: none;
+}
+.compare-banner-topic {
+  font-size: 0.8125rem;
+  color: var(--gov-text-sub);
+}
+.compare-banner-topic strong {
+  color: var(--gov-navy);
   font-weight: 600;
 }
 
@@ -537,6 +612,13 @@ body {
 .insight-title {
   font-weight: 700;
   font-size: 0.875rem;
+  margin: 0 0 0.25rem;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.insight-desc {
+  font-size: 0.75rem;
+  color: var(--gov-text-muted);
   margin: 0 0 0.65rem;
   padding-bottom: 0.45rem;
   border-bottom: 1px solid var(--gov-border);
@@ -737,4 +819,6 @@ body {
   .two-col, .insight-grid, .citation-grid, .stat-grid { grid-template-columns: 1fr; }
   .form-row { flex-direction: column; align-items: stretch; }
   .btn-report { align-self: stretch; }
+  .compare-topic-row { flex-direction: column; }
+  .btn-compare { width: 100%; min-width: 0; }
 }

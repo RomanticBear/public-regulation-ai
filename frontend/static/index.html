@@ -40,7 +40,7 @@
       <button data-tab="compare" class="tab-btn">기관 비교</button>
       <button data-tab="gap" class="tab-btn">검토 권고</button>
       <button data-tab="report" class="tab-btn">벤치마킹 리포트</button>
-      <button data-tab="upload" class="tab-btn">규정 관리</button>
+      <button data-tab="upload" class="tab-btn tab-btn-disabled" disabled title="관리자 전용 기능입니다">규정 관리 <span class="tab-badge">관리자</span></button>
     </div>
   </nav>
 
@@ -116,8 +116,8 @@
         <h2 class="panel-title">기관 간 규정 비교</h2>
         <p class="panel-desc">두 기관의 사규관리규정을 주제별로 대조하여 공통점·차이점을 분석합니다.</p>
       </div>
-      <div class="card">
-        <div class="form-grid form-grid-3">
+      <div class="card compare-form-card">
+        <div class="form-grid form-grid-2 compare-orgs">
           <div class="form-field">
             <label class="label" for="compare-a">비교 기관 A</label>
             <select id="compare-a" class="input"></select>
@@ -126,20 +126,20 @@
             <label class="label" for="compare-b">비교 기관 B</label>
             <select id="compare-b" class="input"></select>
           </div>
-          <div class="form-field">
-            <label class="label" for="compare-topic">비교 주제</label>
-            <input id="compare-topic" type="text" placeholder="예) 입안예고" class="input" />
+        </div>
+        <div class="compare-topic-section">
+          <label class="label" for="compare-topic">비교 주제</label>
+          <div class="compare-topic-row">
+            <input id="compare-topic" type="text" placeholder="주제를 입력하거나 아래에서 선택" class="input" />
+            <button id="btn-compare" type="button" class="btn-primary btn-compare">비교 분석</button>
           </div>
-        </div>
-        <div class="chip-group">
-          <span class="chip-label">주제 선택</span>
-          <button class="chip-compare" data-sample="입안예고">입안예고</button>
-          <button class="chip-compare" data-sample="사후평가">사후평가</button>
-          <button class="chip-compare" data-sample="부패영향평가">부패영향평가</button>
-          <button class="chip-compare" data-sample="규제입증">규제입증</button>
-        </div>
-        <div class="form-actions">
-          <button id="btn-compare" class="btn-primary">비교 분석</button>
+          <div class="compare-chips" role="group" aria-label="주제 빠른 선택">
+            <button type="button" class="chip-compare" data-sample="입안예고">입안예고</button>
+            <button type="button" class="chip-compare" data-sample="제·개정 예고">제·개정 예고</button>
+            <button type="button" class="chip-compare" data-sample="부패영향평가">부패영향평가</button>
+            <button type="button" class="chip-compare" data-sample="사규심의위원회">사규심의위원회</button>
+            <button type="button" class="chip-compare" data-sample="사규 공개">사규 공개</button>
+          </div>
         </div>
       </div>
       <div id="compare-result" class="hidden result-block">
@@ -150,11 +150,13 @@
         </div>
         <div class="insight-grid">
           <div class="insight-card insight-common">
-            <h4 class="insight-title">공통점</h4>
+            <h4 class="insight-title">공통 요소</h4>
+            <p class="insight-desc">두 기관 조문에 공통으로 규정된 절차·의무</p>
             <ul id="compare-common" class="insight-list"></ul>
           </div>
           <div class="insight-card insight-diff">
-            <h4 class="insight-title">차이점</h4>
+            <h4 class="insight-title">주요 차이</h4>
+            <p class="insight-desc">한쪽 기관에만 있거나 다르게 규정된 내용</p>
             <ul id="compare-diff" class="insight-list"></ul>
           </div>
         </div>
@@ -211,8 +213,13 @@
             <table id="gap-matrix" class="data-table"></table>
           </div>
         </div>
-        <div class="card">
-          <h3 class="result-title">타 기관 관련 조문</h3>
+        <div class="card" id="gap-target-wrap">
+          <h3 class="result-title" id="gap-target-title">기준 기관 관련 조문</h3>
+          <div id="gap-target" class="citation-list"></div>
+        </div>
+        <div class="card" id="gap-others-wrap">
+          <h3 class="result-title" id="gap-others-title">타 기관 관련 조문</h3>
+          <p id="gap-others-desc" class="panel-desc hidden"></p>
           <div id="gap-others" class="citation-list"></div>
         </div>
       </div>
