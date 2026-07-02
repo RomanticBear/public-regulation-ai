@@ -8,11 +8,12 @@ from dotenv import load_dotenv
 from src.analysis import build_benchmark_report, build_compare_result, build_coverage_matrix
 from src.retriever import HybridHit, get_search_backend, hybrid_search, similar_articles
 from src.search import SearchHit
+from src.topics import normalize_search_query
 from src.vector_store import is_embedding_available
 
 load_dotenv()
 
-# 규정 Q&A는 소속 기관(한국수자원공사) 조문만 대상
+# 규정 Q&A: 기관은 고정, 질문에 기관명·특정 키워드가 없어도 의미 검색으로 동작
 QA_TARGET_ORG = "한국수자원공사"
 
 
@@ -155,10 +156,12 @@ def run_search(query: str) -> dict[str, Any]:
             "ai_enabled": _openai_available(),
         }
 
-    hits = hybrid_search(articles, query, org=QA_TARGET_ORG, limit=10)
+    search_query = normalize_search_query(query, org=QA_TARGET_ORG)
+    hits = hybrid_search(articles, search_query, org=QA_TARGET_ORG, limit=10)
     backend = hits[0].search_backend if hits else get_search_backend()
     return {
         "query": query,
+        "search_query": search_query,
         "target_org": QA_TARGET_ORG,
         "search_mode": "hybrid",
         "search_backend": backend,

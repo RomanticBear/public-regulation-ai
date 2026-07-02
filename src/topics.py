@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 # 벤치마킹·Gap·리포트 히트맵 — 전 기관 동일 기준
 BENCHMARK_CHECKLIST: dict[str, dict] = {
     "대외 입안예고": {
@@ -111,10 +113,31 @@ def checklist_count() -> int:
     return len(BENCHMARK_CHECKLIST)
 
 
+def normalize_search_query(query: str, *, org: str | None = None) -> str:
+    """자연어 질의 → 검색용 핵심어 (기관명·요청 표현 제거).
+
+    Q&A는 org 파라미터로 기관이 고정되므로, 질문에 기관명을 넣을 필요가 없습니다.
+    """
+    q = query.strip()
+    if org:
+        q = re.sub(re.escape(org), " ", q)
+    for noise in ("사규관리규정", "사규 관리 규정"):
+        q = q.replace(noise, " ")
+    q = re.sub(
+        r"(알려\s*줘|알려주세요|설명\s*해\s*줘|가져와|뭐\s*야|무엇|어떻게\s*되|어떻게|언제|"
+        r"인가요|인지|해\s*주세요|좀|주세요|대해|대하여|관련|에\s*대한|각\s*항목|예시)",
+        " ",
+        q,
+        flags=re.IGNORECASE,
+    )
+    q = re.sub(r"\s+", " ", q).strip(" ,.?")
+    return q or query.strip()
+
+
 def expand_topic_query(topic: str) -> list[str]:
     """주제명 또는 키워드 → 검색어 목록 (Q&A·유사조문용)."""
     q = topic.strip()
-    terms = [q]
+    terms: list[str] = [q] if q and len(q) <= 50 else []
 
     for name, meta in BENCHMARK_CHECKLIST.items():
         keywords = meta.get("keywords", [])
@@ -140,3 +163,13 @@ def expand_topic_query(topic: str) -> list[str]:
 
     terms.extend({t.replace(" ", "") for t in terms})
     return list(dict.fromkeys(t for t in terms if t))
+
+
+def embedding_query(query: str, terms: list[str] | None = None) -> str:
+    """자연어 질의 → embedding 검색용 짧은 검색어 (체크리스트 키워드 우선)."""
+    expanded = terms if terms is not None else expand_topic_query(query)
+    q = query.strip()
+    focused = [t for t in expanded if t != q and len(t) <= 40]
+    if focused:
+        return " ".join(focused[:8])
+    return q

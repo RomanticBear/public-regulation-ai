@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from src.parser import Article
 from src.search import score_article
-from src.topics import expand_topic_query
+from src.topics import embedding_query, expand_topic_query
 from src.vector_store import is_embedding_available, rebuild_vector_store, vector_search
 
 
@@ -78,7 +78,9 @@ def hybrid_search(
             kw_scores[key] = score
             kw_terms[key] = matched
 
-    sem_results = vector_search(query, articles, org=org, limit=limit * 3)
+    sem_results = vector_search(
+        embedding_query(query, terms), articles, org=org, limit=limit * 3
+    )
     sem_scores = {key: score for key, _, score in sem_results}
 
     max_kw = max(kw_scores.values(), default=1.0) or 1.0
@@ -95,6 +97,9 @@ def hybrid_search(
         kw = kw_scores.get(key, 0.0) / max_kw
         sem = sem_scores.get(key, 0.0) / max_sem
         combined = 0.30 * kw + 0.70 * sem
+        # 키워드(체크리스트)로 명확히 맞은 조문은 긴 자연어 질의의 embedding 오탐에 밀리지 않게
+        if kw >= 0.5:
+            combined = max(combined, 0.85 * kw)
         if combined <= 0.05:
             continue
         merged[key] = HybridHit(
